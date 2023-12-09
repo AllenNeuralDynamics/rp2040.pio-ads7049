@@ -13,7 +13,7 @@
 PIO_ADS7049 adc(pio0, CS_PIN, SCK_PIN, POCI_PIN);
 
 // Create a placeholder for measurements.
-uint16_t measurement;
+volatile uint16_t measurement;
 
 
 // Core0 main.
