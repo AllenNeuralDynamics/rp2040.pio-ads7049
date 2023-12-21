@@ -1,8 +1,6 @@
 #include <pico/stdlib.h> // for uart printing
 #include <pio_ads7049.h>
-#ifdef DEBUG
-    #include <cstdio> // for printf
-#endif
+#include <cstdio> // for printf
 
 // These can be any pins, and they need not be adjacent.
 #define CS_PIN (18)
@@ -19,10 +17,7 @@ uint16_t measurement;
 // Core0 main.
 int main()
 {
-#ifdef DEBUG
-    stdio_uart_init_full(uart0, 921600, 0, -1); // use uart1 tx only.
-    printf("Hello, from an RP2040!\r\n");
-#endif
+    stdio_usb_init();
     // Configure DMA to continuously pull data from the PIO and write them here
     // at the maximum sample rate (2MHz).
     // Writes are atomic, so reading this value from the CPU will always return
