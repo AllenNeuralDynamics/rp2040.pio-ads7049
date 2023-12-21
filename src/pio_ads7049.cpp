@@ -18,24 +18,24 @@ PIO_ADS7049::~PIO_ADS7049()
     // TODO: state machine cleanup.
 }
 
-void PIO_ADS7049::setup_dma_stream_to_memory(uint16_t* starting_address,
-                                                    size_t sample_count)
+void PIO_ADS7049::setup_dma_stream_to_memory(volatile uint16_t* starting_address,
+                                             size_t sample_count)
 {
     _setup_dma_stream_to_memory(starting_address, sample_count, false,
                                 0, nullptr);
 }
 
 void PIO_ADS7049::setup_dma_stream_to_memory_with_interrupt(
-    uint16_t* starting_address, size_t sample_count, int dma_irq_source,
-    irq_handler_t handler_func)
+    volatile uint16_t* starting_address, size_t sample_count,
+    int dma_irq_source, irq_handler_t handler_func)
 {
     _setup_dma_stream_to_memory(starting_address, sample_count, true,
         dma_irq_source, handler_func);
 }
 
 void PIO_ADS7049::_setup_dma_stream_to_memory(
-    uint16_t* starting_address, size_t sample_count, bool trigger_interrupt,
-    int dma_irq_source, irq_handler_t handler_func)
+    volatile uint16_t* starting_address, size_t sample_count,
+    bool trigger_interrupt, int dma_irq_source, irq_handler_t handler_func)
 {
     // FIXME: check that dma_irq_source is either DMA_IRQ_0 or DMA_IRQ_1.
     // FIXME: if trigger_interrupt, handler_func cannot be nullptr.

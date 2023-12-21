@@ -33,7 +33,7 @@ public:
  *  specified memory location at 2MHz.
 */
     // FIXME: make inline.
-    void setup_dma_stream_to_memory(uint16_t* starting_address,
+    void setup_dma_stream_to_memory(volatile uint16_t* starting_address,
                                     size_t sample_count);
 
 /**
@@ -42,10 +42,9 @@ public:
  *  values, trigger an interrupt to call the specified callback function.
 */
     // FIXME: make inline.
-    void setup_dma_stream_to_memory_with_interrupt(uint16_t* starting_address,
-                                                   size_t sample_count,
-                                                   int dma_irq_source,
-                                                   irq_handler_t handler_func);
+    void setup_dma_stream_to_memory_with_interrupt(
+        volatile uint16_t* starting_address, size_t sample_count,
+        int dma_irq_source, irq_handler_t handler_func);
 
 /**
  * \brief Configure continuous streaming of a specified number of values to a
@@ -65,7 +64,7 @@ public:
  * \note Although the AD7049 chips return 8, 10, or 12 bit data, DMA always
  *  reads 16-bit words from the PIO rx fifo.
  */
-    void _setup_dma_stream_to_memory(uint16_t* starting_address,
+    void _setup_dma_stream_to_memory(volatile uint16_t* starting_address,
                                      size_t sample_count,
                                      bool trigger_interrupt,
                                      int dma_irq_source,
@@ -90,12 +89,12 @@ private:
     PIO pio_;
     int8_t offset_;
     uint sm_;
-    uint16_t* data_ptr_[1];   // Data that the reconfiguration channel will write back
-                            // to the sample channel. In this case, just the
-                            // address of the location of the adc samples. This
-                            // value must exist with global scope since the DMA
-                            // reconfiguration channel will need to writes its value
-                            // back to the sample channel on regular intervals.
+    volatile uint16_t* data_ptr_[1]; // Data that the reconfiguration channel will write back
+                                     // to the sample channel. In this case, just the
+                                     // address of the location of the adc samples. This
+                                     // value must exist with global scope since the DMA
+                                     // reconfiguration channel will need to writes its value
+                                     // back to the sample channel on regular intervals.
 
 
     uint32_t dma_data_chan_;
