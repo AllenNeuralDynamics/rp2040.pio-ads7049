@@ -83,8 +83,10 @@ data_transfer_setup:
     nop side_set 0      ; SCK LOW
     set x 11
 data_transfer:
-    in pins, 1 side_set 1 [1]  ; Sample data on the rising edge.
-    nop side_set 0
+    nop side_set 1 [1]  ; SCK HIGH
+    in pins, 1 side_set 0 ; Sample data on the falling edge. This is what raw
+                          ; scope traces suggest doing even though the
+                          ; datasheet suggests otherwise.
     jmp x-- data_transfer   ;
 cleanup:    ; autopush should transfer data.
     set pins, 1 [3]; CS HIGH + 1 clock cycle delay
