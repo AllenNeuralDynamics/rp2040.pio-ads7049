@@ -29,6 +29,11 @@ public:
     ~PIO_ADS7049();
 
 /**
+ * \brief release DMA if claimed.
+ */
+    void reset();
+
+/**
  * \brief Configure continuous streaming of a specified number of values to a
  *  specified memory location at 2MHz.
 */
@@ -71,21 +76,33 @@ public:
                                      irq_handler_t handler_func);
 
 /**
- * \brief get the program address (i.e: the offset) that the pio program was
+ * \brief Get the program address (i.e: the offset) that the pio program was
  *  loaded at.
  */
-    int8_t get_program_address()
+    inline int8_t get_program_address()
     {return offset_;}
+
+    inline void clear_interrupt()
+    {
+        if (dma_irq_source_ == DMA_IRQ_0)
+            dma_hw->ints0 = 1u << samp_chan_;
+        else if (dma_irq_source_ == DMA_IRQ_1)
+            dma_hw->ints1 = 1u << samp_chan_;
+    }
 
 /**
  * \brief launch the pio program
  */
     void start();
 
+private:
+    int dma_irq_source_;
     int samp_chan_; // DMA channel used to collect samples and fire an interrupt
                     // if configured to do so. If it fires an interrupt,
                     // a DMA handler function needs to clear it.
-private:
+    int ctrl_chan_; // DMA channel used to reconfigure and retrigger samp_chan_
+                    // to re-run.
+
     PIO pio_;
     int8_t offset_;
     uint sm_;

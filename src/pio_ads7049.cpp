@@ -3,7 +3,8 @@
 PIO_ADS7049::PIO_ADS7049(PIO pio,
                          uint8_t cs_pin, uint8_t sck_pin, uint8_t poci_pin,
                          int8_t existing_program_address)
-:pio_{pio}, offset_{existing_program_address}
+:pio_{pio}, offset_{existing_program_address},
+ samp_chan_{-1}, ctrl_chan_{-1}
 {
     // load program if an existing program address is unspecified.
     if (existing_program_address < 0) // unspecified argument defaults to -1.
@@ -15,14 +16,27 @@ PIO_ADS7049::PIO_ADS7049(PIO pio,
 
 PIO_ADS7049::~PIO_ADS7049()
 {
-    // TODO: state machine cleanup.
+    reset();
+    // FIXME: stop and unclaim PIO sm_; leave memory untouched since other
+    //  programs can overwrite it.
+}
+
+void PIO_ADS7049::reset()
+{
+    // Kill stream-to-memory and interrupt triggering if configured.
+    if (samp_chan_ != -1)
+        dma_channel_cleanup(samp_chan_);
+    if (ctrl_chan_ != -1)
+        dma_channel_cleanup(ctrl_chan_);
+    samp_chan_ = -1;
+    ctrl_chan_ = -1;
 }
 
 void PIO_ADS7049::setup_dma_stream_to_memory(volatile uint16_t* starting_address,
                                              size_t sample_count)
 {
-    _setup_dma_stream_to_memory(starting_address, sample_count, false,
-                                0, nullptr);
+    _setup_dma_stream_to_memory(starting_address, sample_count, false, 0,
+                                nullptr);
 }
 
 void PIO_ADS7049::setup_dma_stream_to_memory_with_interrupt(
@@ -38,7 +52,6 @@ void PIO_ADS7049::_setup_dma_stream_to_memory(
     bool trigger_interrupt, int dma_irq_source, irq_handler_t handler_func)
 {
     // FIXME: check that dma_irq_source is either DMA_IRQ_0 or DMA_IRQ_1.
-    // FIXME: if trigger_interrupt, handler_func cannot be nullptr.
 // Setup inspired by logic analyzer example:
 // https://github.com/raspberrypi/pico-examples/blob/master/pio/logic_analyser/logic_analyser.c#L65
 
@@ -46,18 +59,20 @@ void PIO_ADS7049::_setup_dma_stream_to_memory(
     pio_sm_clear_fifos(pio_, sm_);
     pio_sm_restart(pio_, sm_);
 
+    // Save dma_irq_source so we can later clear the interrupt from the correct
+    // source.
+    dma_irq_source_ = dma_irq_source;
+
     // Get two open DMA channels.
-    // samp_chan_ will sample the adc, paced by DREQ_ADC and chain to ctrl_chan.
-    // ctrl_chan will reconfigure & retrigger samp_chan_ when samp_chan finishes.
+    // samp_chan_ samples the adc, paced by DREQ_ADC and chained to ctrl_chan.
+    // ctrl_chan_ reconfigures & retriggers samp_chan_ when samp_chan_ finishes.
     // samp_chan_ may also trigger an interrupt if configured to do so.
-    // samp_chan_ is a data member since it's value needs to be known, so it can
-    // be cleared in an interrupt handler.
     samp_chan_ = dma_claim_unused_channel(true);
-    int ctrl_chan = dma_claim_unused_channel(true);
+    ctrl_chan_ = dma_claim_unused_channel(true);
     //printf("Sample channel: %d\r\n", samp_chan_);
-    //printf("Ctrl channel: %d\r\n", ctrl_chan);
+    //printf("Ctrl channel: %d\r\n", ctrl_chan_);
     dma_channel_config samp_conf = dma_channel_get_default_config(samp_chan_);
-    dma_channel_config ctrl_conf = dma_channel_get_default_config(ctrl_chan);
+    dma_channel_config ctrl_conf = dma_channel_get_default_config(ctrl_chan_);
 
     // Setup Sample Channel.
     channel_config_set_transfer_data_size(&samp_conf, DMA_SIZE_16);
@@ -66,13 +81,13 @@ void PIO_ADS7049::_setup_dma_stream_to_memory(
     channel_config_set_irq_quiet(&samp_conf, !trigger_interrupt);
     // Pace data according to pio providing data.
     channel_config_set_dreq(&samp_conf, pio_get_dreq(pio_, sm_, false));
-    channel_config_set_chain_to(&samp_conf, ctrl_chan);
+    channel_config_set_chain_to(&samp_conf, ctrl_chan_);
     channel_config_set_enable(&samp_conf, true);
     // Apply samp_chan_ configuration.
     dma_channel_configure(
         samp_chan_,      // Channel to be configured
         &samp_conf,
-        nullptr,        // write (dst) address will be loaded by ctrl_chan.
+        nullptr,        // write (dst) address will be loaded by ctrl_chan_.
         &pio_->rxf[sm_],  // read (source) address. Does not change.
         sample_count,   // Number of word transfers i.e: count_of(adc_samples_dest).
         false           // Don't Start immediately.
@@ -85,7 +100,7 @@ void PIO_ADS7049::_setup_dma_stream_to_memory(
     else if (dma_irq_source == DMA_IRQ_1)
         dma_channel_set_irq1_enabled(samp_chan_, trigger_interrupt);
     // Connnect handler function and enable interrupt.
-    if (trigger_interrupt)
+    if (trigger_interrupt && (handler_func != nullptr))
     {
         irq_set_exclusive_handler(dma_irq_source, handler_func);
         irq_set_enabled(dma_irq_source, true);
@@ -105,14 +120,14 @@ void PIO_ADS7049::_setup_dma_stream_to_memory(
     channel_config_set_enable(&ctrl_conf, true);
     // Apply reconfig channel configuration.
     dma_channel_configure(
-        ctrl_chan,  // Channel to be configured
+        ctrl_chan_,  // Channel to be configured
         &ctrl_conf,
         &dma_hw->ch[samp_chan_].al2_write_addr_trig, // dst address.
         data_ptr_,   // Read (src) address is a single array with the starting address.
         1,          // Number of word transfers.
         false       // Don't Start immediately.
     );
-    dma_channel_start(ctrl_chan);
+    dma_channel_start(ctrl_chan_);
     //printf("Configured DMA control channel.\r\n");
 }
 
